@@ -65,8 +65,17 @@ jobs:
           DEB_FILE=$(ls *.deb | head -1)
           mkdir extracted
           dpkg-deb -x "$DEB_FILE" extracted/
-          cp extracted/Library/MobileSubstrate/DynamicLibraries/LastFMYouTubeMusic.dylib "$GITHUB_WORKSPACE/LastFMYouTubeMusic.dylib"
-          echo "=== Dylib extracted ==="
+          echo "=== Contents of .deb ==="
+          find extracted -name "*.dylib" -o -name "*.plist" | sort
+          DYLIB=$(find extracted -name "LastFMYouTubeMusic.dylib" | head -1)
+          if [ -z "$DYLIB" ]; then
+            echo "❌ Dylib not found in .deb!"
+            echo "Full .deb contents:"
+            find extracted -type f | head -30
+            exit 1
+          fi
+          cp "$DYLIB" "$GITHUB_WORKSPACE/LastFMYouTubeMusic.dylib"
+          echo "=== Dylib extracted from: $DYLIB ==="
           file "$GITHUB_WORKSPACE/LastFMYouTubeMusic.dylib"
 
       # ── 5. Upload dylib as artifact (for debugging) ─────────
