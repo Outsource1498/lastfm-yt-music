@@ -85,18 +85,43 @@ jobs:
           name: LastFMYouTubeMusic-dylib
           path: LastFMYouTubeMusic.dylib
 
-      # ── 6. Install Azule (IPA injection tool) ───────────────
-      - name: Install Azule
+      # ── 6. Install insert_dylib ─────────────────────────────
+      - name: Install insert_dylib
         run: |
-          git clone --depth 1 https://github.com/Al4ise/Azule.git ~/azule
-          chmod +x ~/azule/azule
+          git clone --depth 1 https://github.com/Tyilo/insert_dylib.git ~/insert_dylib
+          cd ~/insert_dylib
+          xcodebuild -project insert_dylib.xcodeproj -target insert_dylib -configuration Release 2>&1 | tail -5
+          cp build/Release/insert_dylib /usr/local/bin/insert_dylib
+          echo "insert_dylib ready"
 
       # ── 7. Inject dylib into IPA ────────────────────────────
       - name: Inject dylib into IPA
         run: |
-          echo "Injecting LastFMYouTubeMusic.dylib into YouTubeMusic.ipa"
-          mkdir -p output
-          ~/azule/azule -i YouTubeMusic.ipa -f LastFMYouTubeMusic.dylib -o ./output -n YouTubeMusic_LastFM
+          echo "=== Injecting dylib ==="
+          # Unzip IPA
+          mkdir -p inject_work
+          unzip -q YouTubeMusic.ipa -d inject_work
+          
+          # Find app bundle and binary
+          APP=$(ls -d inject_work/Payload/*.app | head -1)
+          APP_NAME=$(basename "$APP" .app)
+          BINARY="$APP/$APP_NAME"
+          echo "App: $APP_NAME | Binary: $BINARY"
+          
+          # Inject dylib into binary
+          insert_dylib @executable_path/Frameworks/LastFMYouTubeMusic.dylib "$BINARY" --all-yes 2>&1
+          
+          # Copy dylib into app bundle
+          mkdir -p "$APP/Frameworks"
+          cp LastFMYouTubeMusic.dylib "$APP/Frameworks/"
+          
+          # Re-zip as IPA
+          cd inject_work
+          zip -qr "../output/YouTubeMusic_LastFM.ipa" Payload/
+          cd ..
+          
+          echo "=== Done! ==="
+          ls -lh output/YouTubeMusic_LastFM.ipa
 
       # ── 8. Upload final IPA ─────────────────────────────────
       - name: Upload patched IPA
