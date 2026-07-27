@@ -90,7 +90,7 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/Tyilo/insert_dylib.git ~/insert_dylib
           cd ~/insert_dylib
-          xcodebuild -project insert_dylib.xcodeproj -target insert_dylib -configuration Release 2>&1 | tail -5
+          xcodebuild -project insert_dylib.xcodeproj -target insert_dylib -configuration Release CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO 2>&1 | tail -5
           cp build/Release/insert_dylib /usr/local/bin/insert_dylib
           echo "insert_dylib ready"
 
@@ -98,8 +98,8 @@ jobs:
       - name: Inject dylib into IPA
         run: |
           echo "=== Injecting dylib ==="
+          mkdir -p inject_work output
           # Unzip IPA
-          mkdir -p inject_work
           unzip -q YouTubeMusic.ipa -d inject_work
           
           # Find app bundle and binary
@@ -109,11 +109,12 @@ jobs:
           echo "App: $APP_NAME | Binary: $BINARY"
           
           # Inject dylib into binary
-          insert_dylib @executable_path/Frameworks/LastFMYouTubeMusic.dylib "$BINARY" --all-yes 2>&1
+          insert_dylib @executable_path/Frameworks/LastFMYouTubeMusic.dylib "$BINARY" 2>&1
           
           # Copy dylib into app bundle
           mkdir -p "$APP/Frameworks"
           cp LastFMYouTubeMusic.dylib "$APP/Frameworks/"
+          echo "=== Injection complete ==="
           
           # Re-zip as IPA
           cd inject_work
