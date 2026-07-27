@@ -95,11 +95,12 @@ jobs:
       - name: Inject dylib into IPA
         run: |
           echo "Injecting LastFMYouTubeMusic.dylib into YouTubeMusic.ipa"
-          ~/azule/azule -i YouTubeMusic.ipa -f LastFMYouTubeMusic.dylib -o "YouTubeMusic_LastFM.ipa"
+          mkdir -p output
+          ~/azule/azule -i YouTubeMusic.ipa -f LastFMYouTubeMusic.dylib -o ./output -n YouTubeMusic_LastFM
 
       # ── 8. Upload final IPA ─────────────────────────────────
       - name: Upload patched IPA
         uses: actions/upload-artifact@v4
         with:
           name: YouTubeMusic-LastFM
-          path: YouTubeMusic_LastFM.ipa
+          path: output/YouTubeMusic_LastFM.ipa
