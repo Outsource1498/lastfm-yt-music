@@ -1,0 +1,6 @@
+# IPA files (too large for git)
+*.ipa
+
+# Build artifacts
+packages/
+.deb
