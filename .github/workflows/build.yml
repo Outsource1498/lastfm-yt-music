@@ -85,14 +85,13 @@ jobs:
           name: LastFMYouTubeMusic-dylib
           path: LastFMYouTubeMusic.dylib
 
-      # ── 6. Install insert_dylib (LeanVel fork with --all-yes) ─
+      # ── 6. Install insert_dylib ─────────────────────────────
       - name: Install insert_dylib
         run: |
-          git clone --depth 1 https://github.com/LeanVel/insert_dylib.git ~/insert_dylib
+          git clone --depth 1 https://github.com/Tyilo/insert_dylib.git ~/insert_dylib
           cd ~/insert_dylib
           xcodebuild -project insert_dylib.xcodeproj -target insert_dylib -configuration Release CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO 2>&1 | tail -5
           cp build/Release/insert_dylib /usr/local/bin/insert_dylib
-          insert_dylib --help 2>&1 | head -1
           echo "insert_dylib ready"
 
       # ── 7. Inject dylib into IPA ────────────────────────────
@@ -109,8 +108,8 @@ jobs:
           BINARY="$APP/$APP_NAME"
           echo "App: $APP_NAME | Binary: $BINARY"
           
-          # Inject dylib into binary (strip codesig + auto-confirm)
-          insert_dylib --strip-codesig --all-yes @executable_path/Frameworks/LastFMYouTubeMusic.dylib "$BINARY" 2>&1
+          # Inject dylib into binary
+          insert_dylib @executable_path/Frameworks/LastFMYouTubeMusic.dylib "$BINARY" 2>&1
           
           # Copy dylib into app bundle
           mkdir -p "$APP/Frameworks"
