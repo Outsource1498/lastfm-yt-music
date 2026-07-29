@@ -4,3 +4,10 @@
 # Build artifacts
 packages/
 .deb
+
+# Local WSL build output
+tweak-source/
+work/
+LastFMYouTubeMusic.dylib
+YouTubeMusic_Clean.ipa
+YouTubeMusic_LastFM.ipa

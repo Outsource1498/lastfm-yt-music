@@ -51,7 +51,11 @@ apt_install() {
     sudo apt-get update
     sudo apt-get install -y \
         build-essential fakeroot rsync curl perl zip unzip git \
-        libxml2-utils python3 python3-pip python3-venv
+        libxml2-utils python3 python3-pip python3-venv \
+        libtinfo6
+    # Older Theos toolchain binaries may still link against libtinfo5.
+    # Try to install it, but don't fail if the distro doesn't provide it.
+    sudo apt-get install -y libtinfo5 || true
 }
 
 # ── 1. Dependencies ───────────────────────────────────────
