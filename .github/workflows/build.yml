@@ -26,6 +26,7 @@ jobs:
       # ── 2. Install Ubuntu dependencies ──────────────────────
       - name: Install dependencies
         run: |
+          set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y \
             build-essential fakeroot rsync curl perl zip unzip git \
@@ -34,6 +35,7 @@ jobs:
       # ── 3. Setup Theos + iOS SDK + Linux toolchain ───────────
       - name: Setup Theos
         run: |
+          set -euo pipefail
           export THEOS=~/theos
           echo "THEOS=$THEOS" >> $GITHUB_ENV
           echo "$THEOS/bin" >> $GITHUB_PATH
@@ -41,17 +43,19 @@ jobs:
 
       - name: Install iOS SDK
         run: |
+          set -euo pipefail
           $THEOS/bin/install-sdk latest
 
       - name: Install iOS toolchain for Linux
         run: |
+          set -euo pipefail
           mkdir -p "$THEOS/toolchain/linux/iphone"
           curl -sL "https://github.com/L1ghtmann/llvm-project/releases/latest/download/iOSToolchain-x86_64.tar.xz" | \
             tar -xJvf - -C "$THEOS/toolchain/"
           echo "Toolchain contents:"
           ls -la "$THEOS/toolchain/linux/iphone/bin" | head -10
-        env:
-          THEOS: ${{ env.THEOS }}
+          command -v "$THEOS/toolchain/linux/iphone/bin/clang" && echo "✅ clang present"
+          command -v "$THEOS/toolchain/linux/iphone/bin/ldid" && echo "✅ ldid present"
 
       # ── 4. Clone the tweak source (ORIGINAL — no changes) ───
       - name: Clone lastfm-yt-music source
@@ -60,6 +64,7 @@ jobs:
 
       - name: Configure API Keys in Makefile
         run: |
+          set -euo pipefail
           cd tweak-source
           sed -i "s/LASTFM_API_KEY = xxx/LASTFM_API_KEY = ${{ github.event.inputs.api_key }}/g" Makefile
           sed -i "s/LASTFM_API_SECRET = xxx/LASTFM_API_SECRET = ${{ github.event.inputs.api_secret }}/g" Makefile
@@ -67,6 +72,7 @@ jobs:
       # ── 5. Build the .dylib ─────────────────────────────────
       - name: Build Tweak
         run: |
+          set -euo pipefail
           cd tweak-source
           make clean package FINALPACKAGE=1
 
@@ -98,14 +104,17 @@ jobs:
       # ── 6. Install cyan (Linux-compatible IPA injector) ─────
       - name: Install cyan
         run: |
+          set -euo pipefail
           python3 -m pip install --upgrade pip
           python3 -m pip install --force-reinstall "https://github.com/asdfzxcvbn/pyzule-rw/archive/main.zip"
-          cyan --version
+          which cyan || true
+          python3 -m cyan --version || cyan --version
 
       # ── 7. Obtain clean IPA ────────────────────────────────
       - name: Download clean IPA from URL
         if: ${{ github.event.inputs.clean_ipa_url != '' }}
         run: |
+          set -euo pipefail
           echo "Downloading clean IPA from provided URL..."
           curl -L -o YouTubeMusic_Clean.ipa "${{ github.event.inputs.clean_ipa_url }}"
           file YouTubeMusic_Clean.ipa | grep -qi "zip" && echo "✅ Downloaded valid IPA/ZIP" || { echo "❌ Downloaded file is not a valid IPA/ZIP"; file YouTubeMusic_Clean.ipa; exit 1; }
@@ -113,6 +122,7 @@ jobs:
       - name: Use local IPA fallback
         if: ${{ github.event.inputs.clean_ipa_url == '' }}
         run: |
+          set -euo pipefail
           if [ ! -f YouTubeMusic.ipa ]; then
             echo "❌ No clean_ipa_url provided and YouTubeMusic.ipa not found in repo."
             exit 1
@@ -123,6 +133,7 @@ jobs:
       # ── 8. Inject dylib into clean IPA ─────────────────────
       - name: Inject dylib with cyan
         run: |
+          set -euo pipefail
           mkdir -p output
           cyan -i YouTubeMusic_Clean.ipa -o output/YouTubeMusic_LastFM.ipa -f LastFMYouTubeMusic.dylib --overwrite
           echo "=== Patched IPA created ==="
