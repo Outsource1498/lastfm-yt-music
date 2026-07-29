@@ -17,26 +17,34 @@ static NSString* const LFMBaseURL = @"https://ws.audioscrobbler.com/2.0";
 	[LFMClient createSession];
 }
 + (void) setNowPlaying:(NSString*)track artist:(NSString*)artist duration:(double)duration {
+	NSString *safeTrack = track ?: @"";
+	NSString *safeArtist = artist ?: @"";
+	if (safeTrack.length == 0 || safeArtist.length == 0) return;
+
 	[LFMClient postSongDataToAPI:@{
-		@"artist": artist,
-		@"track": track,
+		@"artist": safeArtist,
+		@"track": safeTrack,
 		@"duration": [NSNumber numberWithDouble:duration],
 		@"album": @"",
-		@"album_artist": artist,
+		@"album_artist": safeArtist,
 		@"method": @"track.updateNowPlaying"
 	}];
 }
 + (void) scrobble:(NSString*)track artist:(NSString*)artist duration:(double)duration elapsed:(double)elapsed {
+	NSString *safeTrack = track ?: @"";
+	NSString *safeArtist = artist ?: @"";
+	if (safeTrack.length == 0 || safeArtist.length == 0) return;
+
 	NSDate *date = [NSDate date];
 	NSTimeInterval unix = [date timeIntervalSince1970];
 	double fixed = trunc((unix - elapsed));
 	[LFMClient postSongDataToAPI:@{
-		@"artist": artist,
-		@"track": track,
+		@"artist": safeArtist,
+		@"track": safeTrack,
 		@"duration": [NSNumber numberWithDouble:duration],
 		@"timestamp": [NSNumber numberWithDouble:fixed],
 		@"album": @"",
-		@"album_artist": artist,
+		@"album_artist": safeArtist,
 		@"method": @"track.scrobble"
 	}];
 }
@@ -49,7 +57,8 @@ static NSString* const LFMBaseURL = @"https://ws.audioscrobbler.com/2.0";
 		postedData[@"sk"] = sessionKey ? sessionKey : @"invalid_key";
 		postedData[@"format"] = @"json";
 		for (id key in data) {
-			postedData[key] = data[key];
+			id value = data[key];
+			if (value) postedData[key] = value;
 		}
 		postedData[@"api_sig"] = [LFMClient makeSignature:postedData secret:API_SECRET];
 		NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:@"https://ws.audioscrobbler.com/2.0/"]
@@ -62,7 +71,9 @@ static NSString* const LFMBaseURL = @"https://ws.audioscrobbler.com/2.0";
 		[request setAllHTTPHeaderFields:headers];
 		NSMutableData *body = [[NSMutableData alloc] initWithData:[@"format=json" dataUsingEncoding:NSUTF8StringEncoding]];
 		for (id key in postedData) {
-			[body appendData:[[NSString stringWithFormat:@"&%@=%@", key, [LFMClient urlEncodedString:postedData[key]]] dataUsingEncoding:NSUTF8StringEncoding]];
+			id value = postedData[key];
+			if (!value) continue;
+			[body appendData:[[NSString stringWithFormat:@"&%@=%@", key, [LFMClient urlEncodedString:value]] dataUsingEncoding:NSUTF8StringEncoding]];
 		}
 		[request setHTTPBody:body];
 		[request setHTTPMethod:@"POST"];

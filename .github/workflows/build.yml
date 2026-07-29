@@ -58,28 +58,25 @@ jobs:
           command -v "$THEOS/toolchain/linux/iphone/bin/clang" && echo "✅ clang present"
           command -v "$THEOS/toolchain/linux/iphone/bin/ldid" && echo "✅ ldid present"
 
-      # ── 4. Clone the tweak source (ORIGINAL — no changes) ───
-      - name: Clone lastfm-yt-music source
-        run: |
-          git clone --depth 1 https://github.com/marioparaschiv/lastfm-yt-music.git tweak-source
-
-      - name: Configure API Keys in Makefile
+      # ── 4. Use the repo's own patched source ───
+      - name: Verify local source
         run: |
           set -euo pipefail
-          cd tweak-source
-          sed -i "s/LASTFM_API_KEY = xxx/LASTFM_API_KEY = ${{ github.event.inputs.api_key }}/g" Makefile
-          sed -i "s/LASTFM_API_SECRET = xxx/LASTFM_API_SECRET = ${{ github.event.inputs.api_secret }}/g" Makefile
+          if [ ! -f Makefile ]; then
+            echo "❌ Makefile not found in repo root"
+            exit 1
+          fi
+          echo " Building from repo's own sources/ directory"
 
       # ── 5. Build the .dylib ─────────────────────────────────
       - name: Build Tweak
         run: |
           set -euo pipefail
-          cd tweak-source
           make clean package FINALPACKAGE=1
 
       - name: Extract dylib from .deb
         run: |
-          cd tweak-source/packages
+          cd packages
           DEB_FILE=$(ls *.deb | head -1)
           mkdir extracted
           dpkg-deb -x "$DEB_FILE" extracted/
@@ -106,7 +103,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: LastFMYouTubeMusic-deb
-          path: tweak-source/packages/*.deb
+          path: packages/*.deb
 
       # ── 6. Install cyan (Linux-compatible IPA injector) ─────
       - name: Install cyan
