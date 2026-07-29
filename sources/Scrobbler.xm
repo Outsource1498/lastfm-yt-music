@@ -1,71 +1,96 @@
 #import "../headers/Scrobbler.h"
+#import <MediaPlayer/MediaPlayer.h>
+
 static NSString *currentSongLocalID = @"";
 static double currentTotalMediaTime = 0;
-static BOOL currentSongReplayed = NO;
-static NSTimer *timer = nil;
 static BOOL scrobbled = NO;
 static BOOL isPlaying = NO;
+static double currentElapsed = 0;
+static NSTimer *timer = nil;
+static NSString *lastArtist = @"";
+static NSString *lastTrack = @"";
+
 @implementation LFMScrobbler
-+ (void) poll {
-	dispatch_async(dispatch_get_main_queue(), ^{
-		YTQueueController *controller = [LFMYouTubeInstances queueController];
-		if (!controller) return;
-		
-		YTQueueItem *item = [controller nowPlayingMusicQueueItem];
-		if (!item) return;
-		
-		YTIPlaylistPanelVideoRenderer *renderer = [item videoRenderer];
-		if (!renderer) return;
-		
-		NSString *artist = [[renderer shortBylineText] stringWithFormattingRemoved];
-		NSString *track = [[renderer title] stringWithFormattingRemoved];
-		if (!artist || !track) return;
-		
-		double mediaTime = [controller nowPlayingVideoMediaTime];
-		NSString *localID = [item localID];
-		if (!localID) return;
-		
-		if ((!currentSongReplayed && [currentSongLocalID isEqualToString:localID] && mediaTime < 1) && isPlaying) {
-			currentSongReplayed = YES;
-		}
-		if ((![currentSongLocalID isEqualToString:localID] || mediaTime > 1) && isPlaying) {
-			currentSongReplayed = NO;
-		}
-		if ((![currentSongLocalID isEqualToString:localID] || currentSongReplayed) && isPlaying) {
-			NSLog(@"Now Playing: %@ - %@", artist, track);
-			scrobbled = NO;
-			currentSongLocalID = localID;
-			[LFMClient setNowPlaying:track artist:artist duration:currentTotalMediaTime];
-		}
-		if (!scrobbled && isPlaying && mediaTime >= (currentTotalMediaTime / 2)) {
-			NSLog(@"Scrobbling: %@ - %@", artist, track);
-			[LFMClient scrobble:track artist:artist duration:currentTotalMediaTime elapsed:mediaTime];
-			scrobbled = YES;
-		}
-	});
+
++ (void) tick {
+	if (!isPlaying || scrobbled || currentTotalMediaTime <= 0 || lastArtist.length == 0 || lastTrack.length == 0) return;
+
+	currentElapsed += 1.0;
+
+	if (currentElapsed >= (currentTotalMediaTime / 2.0)) {
+		NSLog(@"[LastFM] Scrobbling: %@ - %@ at %.0fs / %.0fs", lastArtist, lastTrack, currentElapsed, currentTotalMediaTime);
+		[LFMClient scrobble:lastTrack artist:lastArtist duration:currentTotalMediaTime elapsed:currentElapsed];
+		scrobbled = YES;
+	}
 }
-@end
+
++ (void) startTimer {
+	if (timer) return;
+	timer = [NSTimer scheduledTimerWithTimeInterval:1.0f
+		target:[NSBlockOperation blockOperationWithBlock:^{ [LFMScrobbler tick]; }]
+		selector:@selector(main)
+		userInfo:nil
+		repeats:YES
+	];
+}
+
++ (void) stopTimer {
+	if (timer) {
+		[timer invalidate];
+		timer = nil;
+	}
+}
+
++ (void) poll {
+	// Legacy entry point kept for compatibility with Main.xm hooks.
+}
+
++ (void) setCurrentSong:(NSString*)artist track:(NSString*)track duration:(double)duration {
+	if (!artist || !track || artist.length == 0 || track.length == 0) return;
+
+	NSString *localID = [NSString stringWithFormat:@"%@ - %@", artist, track];
+	if ([currentSongLocalID isEqualToString:localID]) return;
+
+	currentSongLocalID = localID;
+	lastArtist = artist;
+	lastTrack = track;
+	currentTotalMediaTime = duration;
+	currentElapsed = 0;
+	scrobbled = NO;
+	isPlaying = YES;
+
+	NSLog(@"[LastFM] Now Playing: %@ - %@ (%.0fs)", artist, track, duration);
+	[LFMClient setNowPlaying:track artist:artist duration:duration];
+	[LFMScrobbler startTimer];
+}
+
+%end
+
+%hook MPNowPlayingInfoCenter
+
+- (void)setNowPlayingInfo:(NSDictionary *)nowPlayingInfo {
+	%orig;
+
+	NSString *artist = nowPlayingInfo[MPMediaItemPropertyArtist];
+	NSString *track = nowPlayingInfo[MPMediaItemPropertyTitle];
+	NSNumber *duration = nowPlayingInfo[MPMediaItemPropertyPlaybackDuration];
+
+	[LFMScrobbler setCurrentSong:artist track:track duration:duration.doubleValue];
+}
+
+%end
+
 %hook MLHAMPlayerItem
+
 - (void) playerStateDidChangeFrom:(NSInteger*)from to:(NSInteger*)to {
 	%orig;
+
 	// 3 - Playing
 	if ((int)(size_t)to == 3) {
-		isPlaying = TRUE;
-		dispatch_async(dispatch_get_main_queue(), ^{
-			timer = [NSTimer
-				scheduledTimerWithTimeInterval:1.0f
-				target:[NSBlockOperation blockOperationWithBlock:^{ [LFMScrobbler poll]; }]
-				selector:@selector(main)
-				userInfo:nil
-				repeats:YES
-			];
-		});
+		isPlaying = YES;
 	} else {
-		if (timer) {
-			[timer invalidate];
-		}
-		isPlaying = FALSE;
+		isPlaying = NO;
 	}
-	currentTotalMediaTime = [self totalMediaTime];
 }
+
 %end

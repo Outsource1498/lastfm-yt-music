@@ -9,5 +9,5 @@ LASTFM_API_SECRET = 69dc74de5bb43846ac88573c243e4a0a
 TWEAK_NAME = LastFMYouTubeMusic
 $(TWEAK_NAME)_FILES = $(shell find sources -name "*.x*")
 $(TWEAK_NAME)_CFLAGS = -fobjc-arc -DAPI_KEY=@\"$(LASTFM_API_KEY)\" -DAPI_SECRET=@\"$(LASTFM_API_SECRET)\"
-$(TWEAK_NAME)_FRAMEWORKS = UIKit Foundation CydiaSubstrate
+$(TWEAK_NAME)_FRAMEWORKS = UIKit Foundation CydiaSubstrate MediaPlayer
 include $(THEOS_MAKE_PATH)/tweak.mk
