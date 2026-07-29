@@ -128,14 +128,15 @@ jobs:
         run: |
           set -euo pipefail
           if [ ! -f YouTubeMusic.ipa ]; then
-            echo "❌ No clean_ipa_url provided and YouTubeMusic.ipa not found in repo."
-            exit 1
+            echo "⚠️ No clean_ipa_url provided and YouTubeMusic.ipa not found in repo. Skipping IPA injection."
+          else
+            cp YouTubeMusic.ipa YouTubeMusic_Clean.ipa
+            echo "Using local YouTubeMusic.ipa (make sure it is clean/decrypted)"
           fi
-          cp YouTubeMusic.ipa YouTubeMusic_Clean.ipa
-          echo "Using local YouTubeMusic.ipa (make sure it is clean/decrypted)"
 
       # ── 8. Inject dylib into clean IPA ─────────────────────
       - name: Inject dylib with cyan
+        if: ${{ github.event.inputs.clean_ipa_url != '' || hashFiles('YouTubeMusic.ipa') != '' }}
         run: |
           set -euo pipefail
           mkdir -p output
@@ -145,6 +146,7 @@ jobs:
 
       # ── 9. Upload final IPA ─────────────────────────────────
       - name: Upload patched IPA
+        if: ${{ github.event.inputs.clean_ipa_url != '' || hashFiles('YouTubeMusic.ipa') != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: YouTubeMusic-LastFM
