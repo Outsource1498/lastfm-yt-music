@@ -34,19 +34,14 @@ static NSString *lastTrack = @"";
 	];
 }
 
-+ (void) stopTimer {
-	if (timer) {
-		[timer invalidate];
-		timer = nil;
-	}
-}
-
 + (void) poll {
 	// Legacy entry point kept for compatibility with Main.xm hooks.
 }
 
 + (void) setCurrentSong:(NSString*)artist track:(NSString*)track duration:(double)duration {
-	if (!artist || !track || artist.length == 0 || track.length == 0) return;
+	if (!track || track.length == 0) return;
+	if (!artist || artist.length == 0) artist = @"Unknown Artist";
+	if (duration <= 0) duration = 0;
 
 	NSString *localID = [NSString stringWithFormat:@"%@ - %@", artist, track];
 	if ([currentSongLocalID isEqualToString:localID]) return;
@@ -71,9 +66,16 @@ static NSString *lastTrack = @"";
 - (void)setNowPlayingInfo:(NSDictionary *)nowPlayingInfo {
 	%orig;
 
+	if (!nowPlayingInfo || nowPlayingInfo.count == 0) {
+		NSLog(@"[LastFM] setNowPlayingInfo called with empty info");
+		return;
+	}
+
 	NSString *artist = nowPlayingInfo[MPMediaItemPropertyArtist];
 	NSString *track = nowPlayingInfo[MPMediaItemPropertyTitle];
 	NSNumber *duration = nowPlayingInfo[MPMediaItemPropertyPlaybackDuration];
+
+	NSLog(@"[LastFM] MPNowPlayingInfoCenter artist=%@ track=%@ duration=%@", artist, track, duration);
 
 	[LFMScrobbler setCurrentSong:artist track:track duration:duration.doubleValue];
 }
