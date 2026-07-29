@@ -1,4 +1,4 @@
-name: Build Last.fm YouTube Music Tweak + Inject IPA
+name: Build Last.fm YouTube Music Tweak + Inject IPA (Ubuntu)
 
 on:
   workflow_dispatch:
@@ -11,36 +11,49 @@ on:
         description: 'Last.fm API Secret'
         required: true
         default: '69dc74de5bb43846ac88573c243e4a0a'
+      clean_ipa_url:
+        description: 'Direct URL to a clean, decrypted YouTube Music IPA (leave empty to use YouTubeMusic.ipa in repo)'
+        required: false
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     steps:
-      # ── 1. Checkout this repo (contains the IPA) ───────────
+      # ── 1. Checkout this repo ────────────────────────────────
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Verify IPA exists
+      # ── 2. Install Ubuntu dependencies ──────────────────────
+      - name: Install dependencies
         run: |
-          ls -lh YouTubeMusic.ipa
-          file YouTubeMusic.ipa | grep -q "Zip archive" && echo "✅ Valid IPA found" || { echo "❌ IPA missing or invalid"; exit 1; }
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential fakeroot rsync curl perl zip unzip git \
+            libxml2-utils python3 python3-pip python3-venv
 
-      # ── 2. Setup Theos ──────────────────────────────────────
-      - name: Install Dependencies
+      # ── 3. Setup Theos + iOS SDK + Linux toolchain ───────────
+      - name: Setup Theos
         run: |
-          brew install ldid dpkg
-
-      - name: Clone Theos
-        run: |
-          git clone --recursive --depth 1 https://github.com/theos/theos.git ~/theos
-          echo "THEOS=${{ runner.home }}/theos" >> $GITHUB_ENV
+          export THEOS=~/theos
+          echo "THEOS=$THEOS" >> $GITHUB_ENV
+          echo "$THEOS/bin" >> $GITHUB_PATH
+          git clone --recursive --depth 1 https://github.com/theos/theos.git "$THEOS"
 
       - name: Install iOS SDK
         run: |
-          mkdir -p ~/theos/sdks
-          curl -sL https://github.com/theos/sdks/archive/master.tar.gz | tar xz --strip-components=1 -C ~/theos/sdks
+          $THEOS/bin/install-sdk latest
 
-      # ── 3. Clone the tweak source (ORIGINAL — no changes) ───
+      - name: Install iOS toolchain for Linux
+        run: |
+          mkdir -p "$THEOS/toolchain/linux/iphone"
+          curl -sL "https://github.com/L1ghtmann/llvm-project/releases/latest/download/iOSToolchain-x86_64.tar.xz" | \
+            tar -xJvf - -C "$THEOS/toolchain/"
+          echo "Toolchain contents:"
+          ls -la "$THEOS/toolchain/linux/iphone/bin" | head -10
+        env:
+          THEOS: ${{ env.THEOS }}
+
+      # ── 4. Clone the tweak source (ORIGINAL — no changes) ───
       - name: Clone lastfm-yt-music source
         run: |
           git clone --depth 1 https://github.com/marioparaschiv/lastfm-yt-music.git tweak-source
@@ -48,13 +61,11 @@ jobs:
       - name: Configure API Keys in Makefile
         run: |
           cd tweak-source
-          sed -i '' "s/LASTFM_API_KEY = xxx/LASTFM_API_KEY = ${{ github.event.inputs.api_key }}/g" Makefile
-          sed -i '' "s/LASTFM_API_SECRET = xxx/LASTFM_API_SECRET = ${{ github.event.inputs.api_secret }}/g" Makefile
+          sed -i "s/LASTFM_API_KEY = xxx/LASTFM_API_KEY = ${{ github.event.inputs.api_key }}/g" Makefile
+          sed -i "s/LASTFM_API_SECRET = xxx/LASTFM_API_SECRET = ${{ github.event.inputs.api_secret }}/g" Makefile
 
-      # ── 4. Build the .dylib ─────────────────────────────────
+      # ── 5. Build the .dylib ─────────────────────────────────
       - name: Build Tweak
-        env:
-          THEOS: /Users/runner/theos
         run: |
           cd tweak-source
           make clean package FINALPACKAGE=1
@@ -78,53 +89,46 @@ jobs:
           echo "=== Dylib extracted from: $DYLIB ==="
           file "$GITHUB_WORKSPACE/LastFMYouTubeMusic.dylib"
 
-      # ── 5. Upload dylib as artifact (for debugging) ─────────
-      - name: Upload dylib
+      - name: Upload dylib artifact (debug)
         uses: actions/upload-artifact@v4
         with:
           name: LastFMYouTubeMusic-dylib
           path: LastFMYouTubeMusic.dylib
 
-      # ── 6. Install insert_dylib ─────────────────────────────
-      - name: Install insert_dylib
+      # ── 6. Install cyan (Linux-compatible IPA injector) ─────
+      - name: Install cyan
         run: |
-          git clone --depth 1 https://github.com/Tyilo/insert_dylib.git ~/insert_dylib
-          cd ~/insert_dylib
-          xcodebuild -project insert_dylib.xcodeproj -target insert_dylib -configuration Release CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO 2>&1 | tail -5
-          cp build/Release/insert_dylib /usr/local/bin/insert_dylib
-          echo "insert_dylib ready"
+          python3 -m pip install --upgrade pip
+          python3 -m pip install --force-reinstall "https://github.com/asdfzxcvbn/pyzule-rw/archive/main.zip"
+          cyan --version
 
-      # ── 7. Inject dylib into IPA ────────────────────────────
-      - name: Inject dylib into IPA
+      # ── 7. Obtain clean IPA ────────────────────────────────
+      - name: Download clean IPA from URL
+        if: ${{ github.event.inputs.clean_ipa_url != '' }}
         run: |
-          echo "=== Injecting dylib ==="
-          mkdir -p inject_work output
-          # Unzip IPA
-          unzip -q YouTubeMusic.ipa -d inject_work
-          
-          # Find app bundle and binary
-          APP=$(ls -d inject_work/Payload/*.app | head -1)
-          APP_NAME=$(basename "$APP" .app)
-          BINARY="$APP/$APP_NAME"
-          echo "App: $APP_NAME | Binary: $BINARY"
-          
-          # Inject dylib into binary
-          insert_dylib @executable_path/Frameworks/LastFMYouTubeMusic.dylib "$BINARY" 2>&1
-          
-          # Copy dylib into app bundle
-          mkdir -p "$APP/Frameworks"
-          cp LastFMYouTubeMusic.dylib "$APP/Frameworks/"
-          echo "=== Injection complete ==="
-          
-          # Re-zip as IPA
-          cd inject_work
-          zip -qr "../output/YouTubeMusic_LastFM.ipa" Payload/
-          cd ..
-          
-          echo "=== Done! ==="
+          echo "Downloading clean IPA from provided URL..."
+          curl -L -o YouTubeMusic_Clean.ipa "${{ github.event.inputs.clean_ipa_url }}"
+          file YouTubeMusic_Clean.ipa | grep -qi "zip" && echo "✅ Downloaded valid IPA/ZIP" || { echo "❌ Downloaded file is not a valid IPA/ZIP"; file YouTubeMusic_Clean.ipa; exit 1; }
+
+      - name: Use local IPA fallback
+        if: ${{ github.event.inputs.clean_ipa_url == '' }}
+        run: |
+          if [ ! -f YouTubeMusic.ipa ]; then
+            echo "❌ No clean_ipa_url provided and YouTubeMusic.ipa not found in repo."
+            exit 1
+          fi
+          cp YouTubeMusic.ipa YouTubeMusic_Clean.ipa
+          echo "Using local YouTubeMusic.ipa (make sure it is clean/decrypted)"
+
+      # ── 8. Inject dylib into clean IPA ─────────────────────
+      - name: Inject dylib with cyan
+        run: |
+          mkdir -p output
+          cyan -i YouTubeMusic_Clean.ipa -o output/YouTubeMusic_LastFM.ipa -f LastFMYouTubeMusic.dylib --overwrite
+          echo "=== Patched IPA created ==="
           ls -lh output/YouTubeMusic_LastFM.ipa
 
-      # ── 8. Upload final IPA ─────────────────────────────────
+      # ── 9. Upload final IPA ─────────────────────────────────
       - name: Upload patched IPA
         uses: actions/upload-artifact@v4
         with:
