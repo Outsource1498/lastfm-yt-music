@@ -59,7 +59,7 @@ static NSString *lastTrack = @"";
 	[LFMScrobbler startTimer];
 }
 
-%end
+@end
 
 %hook MPNowPlayingInfoCenter
 
