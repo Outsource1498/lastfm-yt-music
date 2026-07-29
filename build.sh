@@ -56,7 +56,7 @@ apt_install() {
 
 # ── 1. Dependencies ───────────────────────────────────────
 setup_deps() {
-    if ! command_exists clang && ! command_exists make && ! command_exists python3; then
+    if ! command_exists clang || ! command_exists make || ! command_exists python3 || ! command_exists git; then
         apt_install
     fi
 }
@@ -92,7 +92,6 @@ setup_theos() {
         echo "[*] iOS toolchain already installed."
     fi
 
-    echo "$THEOS/bin" >> "$GITHUB_PATH" 2>/dev/null || true
 }
 
 # ── 3. Cyan (injector) setup ─────────────────────────────
@@ -170,7 +169,7 @@ inject() {
     echo ""
     echo "[*] Injecting dylib into IPA..."
     rm -f "$SCRIPT_DIR/$OUTPUT"
-    cyan -i "$WORK_DIR/YouTubeMusic_Clean.ipa" -o "$SCRIPT_DIR/$OUTPUT" \
+    python3 -m cyan -i "$WORK_DIR/YouTubeMusic_Clean.ipa" -o "$SCRIPT_DIR/$OUTPUT" \
          -f "$SCRIPT_DIR/LastFMYouTubeMusic.dylib" --overwrite
 
     if [ ! -f "$SCRIPT_DIR/$OUTPUT" ]; then
