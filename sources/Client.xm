@@ -152,8 +152,50 @@ static NSString* const LFMBaseURL = @"https://ws.audioscrobbler.com/2.0";
 		view.delegate = controller;
 		[controller presentViewController:view animated:YES completion:nil];
 	});
-}
-+ (NSString*) createSession {
+}	+ (void) logout {
+		[[NSUserDefaults standardUserDefaults] removeObjectForKey:@"lfmSessionKey"];
+		[[NSUserDefaults standardUserDefaults] removeObjectForKey:@"lfmToken"];
+		[[NSUserDefaults standardUserDefaults] removeObjectForKey:@"lfmUsername"];
+		[[NSUserDefaults standardUserDefaults] synchronize];
+		NSLog(@"[LastFM] Logged out");
+	}
+
+	+ (NSString*) username {
+		return [[NSUserDefaults standardUserDefaults] stringForKey:@"lfmUsername"];
+	}
+
+	+ (void) refreshUsername {
+		NSString *sessionKey = [[NSUserDefaults standardUserDefaults] stringForKey:@"lfmSessionKey"];
+		if (!sessionKey) return;
+
+		NSString *signature = [LFMClient makeSignature:@{
+			@"api_key": API_KEY,
+			@"method": @"user.getInfo",
+			@"sk": sessionKey
+		} secret:API_SECRET];
+
+		NSString *_url = [NSString stringWithFormat:@"%@/?method=user.getInfo&api_key=%@&api_sig=%@&sk=%@&format=json", LFMBaseURL, API_KEY, signature, sessionKey];
+		NSURL *url = [NSURL URLWithString:_url];
+		NSURLRequest *request = [NSURLRequest requestWithURL:url];
+
+		NSURLSessionDataTask *task = [[NSURLSession sharedSession] dataTaskWithRequest:request
+			completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+				if (error) {
+					NSLog(@"[LastFM] Error fetching username: %@", error);
+					return;
+				}
+				id json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+				NSString *name = json[@"user"][@"name"];
+				if (name) {
+					[[NSUserDefaults standardUserDefaults] setObject:name forKey:@"lfmUsername"];
+					NSLog(@"[LastFM] Username: %@", name);
+				}
+			}
+		];
+		[task resume];
+	}
+
+	+ (NSString*) createSession {
 	NSString *cached = [[NSUserDefaults standardUserDefaults] stringForKey:@"lfmToken"];
 	NSString *token = cached ? cached : [LFMClient createToken];
 	NSLog(@"https://www.last.fm/api/auth/?api_key=%@&token=%@", API_KEY, token);

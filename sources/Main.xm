@@ -3,6 +3,24 @@
 - (void) viewDidLoad {
 	%orig;
 	NSLog(@"Started.");
+
+	UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
+	button.translatesAutoresizingMaskIntoConstraints = NO;
+	[button setTitle:@"Last.fm" forState:UIControlStateNormal];
+	button.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.6];
+	[button setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+	button.titleLabel.font = [UIFont boldSystemFontOfSize:12];
+	button.layer.cornerRadius = 14;
+	[button addTarget:self action:@selector(lfm_openSettings:) forControlEvents:UIControlEventTouchUpInside];
+	[self.view addSubview:button];
+
+	[NSLayoutConstraint activateConstraints:@[
+		[button.widthAnchor constraintEqualToConstant:70],
+		[button.heightAnchor constraintEqualToConstant:28],
+		[button.trailingAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.trailingAnchor constant:-12],
+		[button.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:12]
+	]];
+
 	if(![[NSUserDefaults standardUserDefaults] stringForKey:@"lfmSessionKey"]) {
 		@try {
 			[LFMClient createToken];
@@ -15,6 +33,12 @@
 		}
 	};
 }
+
+%new
+- (void)lfm_openSettings:(id)sender {
+	[LFMSettingsViewController showFromViewController:self];
+}
+
 %end
 %hook YTMQueueModificationNotifier
 - (void) queueController:(id)controller didReplacePlaylistWithPlaylistPanel:(id)panel {

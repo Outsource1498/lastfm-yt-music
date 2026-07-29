@@ -11,3 +11,4 @@
 #import "Client.h"
 #import "Scrobbler.h"
 #import "Instances.h"
+#import "Settings.h"

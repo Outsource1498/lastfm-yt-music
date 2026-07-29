@@ -11,4 +11,7 @@
 + (void) handleBrowserExit;
 + (NSString*) createToken;
 + (void) authorize;
++ (void) logout;
++ (NSString*) username;
++ (void) refreshUsername;
 @end
