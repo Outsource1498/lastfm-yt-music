@@ -50,10 +50,11 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$THEOS/toolchain/linux/iphone"
-          curl -sL "https://github.com/L1ghtmann/llvm-project/releases/latest/download/iOSToolchain-x86_64.tar.xz" | \
+          curl -fsSL "https://github.com/L1ghtmann/llvm-project/releases/latest/download/iOSToolchain-x86_64.tar.xz" | \
             tar -xJvf - -C "$THEOS/toolchain/"
           echo "Toolchain contents:"
-          ls -la "$THEOS/toolchain/linux/iphone/bin" | head -10
+          ls -la "$THEOS/toolchain/linux/iphone/bin" > /tmp/toolchain_bin.txt
+          head -10 /tmp/toolchain_bin.txt
           command -v "$THEOS/toolchain/linux/iphone/bin/clang" && echo "✅ clang present"
           command -v "$THEOS/toolchain/linux/iphone/bin/ldid" && echo "✅ ldid present"
 
@@ -101,6 +102,12 @@ jobs:
           name: LastFMYouTubeMusic-dylib
           path: LastFMYouTubeMusic.dylib
 
+      - name: Upload .deb package
+        uses: actions/upload-artifact@v4
+        with:
+          name: LastFMYouTubeMusic-deb
+          path: tweak-source/packages/*.deb
+
       # ── 6. Install cyan (Linux-compatible IPA injector) ─────
       - name: Install cyan
         run: |
@@ -116,7 +123,7 @@ jobs:
         run: |
           set -euo pipefail
           echo "Downloading clean IPA from provided URL..."
-          curl -L -o YouTubeMusic_Clean.ipa "${{ github.event.inputs.clean_ipa_url }}"
+          curl -fsSL -o YouTubeMusic_Clean.ipa "${{ github.event.inputs.clean_ipa_url }}"
           file YouTubeMusic_Clean.ipa | grep -qi "zip" && echo "✅ Downloaded valid IPA/ZIP" || { echo "❌ Downloaded file is not a valid IPA/ZIP"; file YouTubeMusic_Clean.ipa; exit 1; }
 
       - name: Use local IPA fallback
