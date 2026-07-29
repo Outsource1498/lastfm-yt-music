@@ -60,7 +60,7 @@ apt_install() {
 
 # ── 1. Dependencies ───────────────────────────────────────
 setup_deps() {
-    if ! command_exists clang || ! command_exists make || ! command_exists python3 || ! command_exists git; then
+    if ! command_exists make || ! command_exists python3 || ! command_exists git || ! command_exists dpkg-deb; then
         apt_install
     fi
 }
