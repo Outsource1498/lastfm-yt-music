@@ -43,6 +43,7 @@
 	statusLabel.text = username ? [NSString stringWithFormat:@"Connected: %@", username] : @"Not connected";
 	statusLabel.font = [UIFont systemFontOfSize:12];
 	statusLabel.textColor = [UIColor secondaryLabelColor];
+	statusLabel.tag = 9998;
 	
 	// Disclosure chevron
 	UIImageView *chevron = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"chevron.right"]];
@@ -83,20 +84,51 @@
 		[chevron.trailingAnchor constraintEqualToAnchor:lfmRow.trailingAnchor constant:-12],
 	]];
 	
-	// Push collection view content below our row
+	// Push collection view content below our row (recursive search)
 	dispatch_async(dispatch_get_main_queue(), ^{
-		for (UIView *subview in self.view.subviews) {
-			if ([subview isKindOfClass:[UIScrollView class]] && subview != lfmRow) {
-				UIScrollView *scrollView = (UIScrollView *)subview;
-				UIEdgeInsets insets = scrollView.contentInset;
-				if (insets.top < 80) {
-					insets.top += 72;
-					scrollView.contentInset = insets;
-					scrollView.scrollIndicatorInsets = insets;
-				}
+		UIView *scrollView = [self lfm_findScrollViewInView:self.view excluding:lfmRow];
+		if ([scrollView isKindOfClass:[UIScrollView class]]) {
+			UIScrollView *sv = (UIScrollView *)scrollView;
+			UIEdgeInsets insets = sv.contentInset;
+			if (insets.top < 80) {
+				insets.top += 72;
+				sv.contentInset = insets;
+				sv.scrollIndicatorInsets = insets;
 			}
 		}
 	});
+	
+	// Observe login/logout changes to update status live
+	[[NSNotificationCenter defaultCenter] addObserver:self
+		selector:@selector(lfm_userDefaultsChanged:)
+		name:NSUserDefaultsDidChangeNotification
+		object:nil];
+}
+
+%new
+- (UIView *)lfm_findScrollViewInView:(UIView *)view excluding:(UIView *)exclude {
+	if (view == exclude) return nil;
+	if ([view isKindOfClass:[UIScrollView class]]) return view;
+	for (UIView *subview in view.subviews) {
+		UIView *found = [self lfm_findScrollViewInView:subview excluding:exclude];
+		if (found) return found;
+	}
+	return nil;
+}
+
+%new
+- (void)lfm_updateStatusLabel {
+	UIView *row = [self.view viewWithTag:9999];
+	if (!row) return;
+	UILabel *statusLabel = [row viewWithTag:9998];
+	if (!statusLabel) return;
+	NSString *username = [LFMClient username];
+	statusLabel.text = username ? [NSString stringWithFormat:@"Connected: %@", username] : @"Not connected";
+}
+
+%new
+- (void)lfm_userDefaultsChanged:(NSNotification *)note {
+	[self lfm_updateStatusLabel];
 }
 
 %new

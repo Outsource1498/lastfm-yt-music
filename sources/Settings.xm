@@ -22,6 +22,22 @@
 	self.tableView.scrollEnabled = YES;
 	[self.tableView registerClass:[UITableViewCell class] forCellReuseIdentifier:@"Cell"];
 	[self.view addSubview:self.tableView];
+	
+	// Observe login/logout changes to reload table live
+	[[NSNotificationCenter defaultCenter] addObserver:self
+		selector:@selector(lfm_userDefaultsChanged:)
+		name:NSUserDefaultsDidChangeNotification
+		object:nil];
+}
+
+- (void)dealloc {
+	[[NSNotificationCenter defaultCenter] removeObserver:self];
+}
+
+- (void)lfm_userDefaultsChanged:(NSNotification *)note {
+	dispatch_async(dispatch_get_main_queue(), ^{
+		[self.tableView reloadData];
+	});
 }
 
 - (void)doneTapped {
@@ -30,7 +46,7 @@
 
 - (void)viewWillAppear:(BOOL)animated {
 	[super viewWillAppear:animated];
-	// Refresh username when the view appears
+	// Refresh username when the view appears (async, table updates via notification)
 	if ([[NSUserDefaults standardUserDefaults] stringForKey:@"lfmSessionKey"]) {
 		[LFMClient refreshUsername];
 	}
