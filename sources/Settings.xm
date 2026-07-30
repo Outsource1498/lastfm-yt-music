@@ -7,102 +7,135 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	self.view.backgroundColor = [UIColor systemBackgroundColor];
-	self.title = @"Last.fm";
+	self.view.backgroundColor = [UIColor systemGroupedBackgroundColor];
+	self.title = @"Last.fm Scrobbler";
+	
+	// Add a Done button for modal dismissal
+	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemDone target:self action:@selector(doneTapped)];
 
-	UIScrollView *scrollView = [[UIScrollView alloc] initWithFrame:self.view.bounds];
-	scrollView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-	[self.view addSubview:scrollView];
-
-	UIView *contentView = [[UIView alloc] init];
-	contentView.translatesAutoresizingMaskIntoConstraints = NO;
-	[scrollView addSubview:contentView];
-
-	UILabel *titleLabel = [self lfm_labelWithText:@"Last.fm for YouTube Music" fontSize:22 bold:YES];
-	[self lfm_addSubview:titleLabel to:contentView after:nil];
-
-	NSString *username = [LFMClient username];
-	NSString *statusText = username && username.length > 0
-		? [NSString stringWithFormat:@"Logged in as: %@", username]
-		: @"Not logged in";
-	UILabel *statusLabel = [self lfm_labelWithText:statusText fontSize:16 bold:NO];
-	statusLabel.tag = 1001;
-	[self lfm_addSubview:statusLabel to:contentView after:titleLabel];
-
-	NSString *sessionKey = [[NSUserDefaults standardUserDefaults] stringForKey:@"lfmSessionKey"];
-	NSString *buttonTitle = sessionKey ? @"Log out" : @"Log in to Last.fm";
-	UIButton *actionButton = [UIButton buttonWithType:UIButtonTypeSystem];
-	[actionButton setTitle:buttonTitle forState:UIControlStateNormal];
-	actionButton.titleLabel.font = [UIFont systemFontOfSize:17 weight:UIFontWeightSemibold];
-	actionButton.tag = 1002;
-	[self lfm_addSubview:actionButton to:contentView after:statusLabel];
-
-	if (sessionKey) {
-		[actionButton addTarget:self action:@selector(logoutTapped:) forControlEvents:UIControlEventTouchUpInside];
-	} else {
-		[actionButton addTarget:self action:@selector(loginTapped:) forControlEvents:UIControlEventTouchUpInside];
-	}
-
-	UILabel *authorLabel = [self lfm_labelWithText:@"Author: eternal" fontSize:14 bold:NO];
-	[self lfm_addSubview:authorLabel to:contentView after:actionButton];
-
-	UILabel *aiLabel = [self lfm_labelWithText:@"AI was used for updating classes" fontSize:12 bold:NO];
-	aiLabel.textColor = [UIColor secondaryLabelColor];
-	[self lfm_addSubview:aiLabel to:contentView after:authorLabel];
-
-	UILabel *versionLabel = [self lfm_labelWithText:@"v0.0.2" fontSize:12 bold:NO];
-	versionLabel.textColor = [UIColor secondaryLabelColor];
-	[self lfm_addSubview:versionLabel to:contentView after:aiLabel];
-
-	[NSLayoutConstraint activateConstraints:@[
-		[contentView.topAnchor constraintEqualToAnchor:scrollView.topAnchor constant:20],
-		[contentView.leadingAnchor constraintEqualToAnchor:scrollView.leadingAnchor constant:20],
-		[contentView.trailingAnchor constraintEqualToAnchor:scrollView.trailingAnchor constant:-20],
-		[contentView.widthAnchor constraintEqualToAnchor:scrollView.widthAnchor constant:-40],
-		[contentView.bottomAnchor constraintEqualToAnchor:scrollView.bottomAnchor constant:-20]
-	]];
+	UITableViewStyle style = UITableViewStyleInsetGrouped;
+	CGRect frame = self.view.bounds;
+	self.tableView = [[UITableView alloc] initWithFrame:frame style:style];
+	self.tableView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+	self.tableView.delegate = self;
+	self.tableView.dataSource = self;
+	self.tableView.scrollEnabled = YES;
+	[self.tableView registerClass:[UITableViewCell class] forCellReuseIdentifier:@"Cell"];
+	[self.view addSubview:self.tableView];
 }
 
-- (UILabel*)lfm_labelWithText:(NSString*)text fontSize:(CGFloat)fontSize bold:(BOOL)bold {
-	UILabel *label = [[UILabel alloc] init];
-	label.translatesAutoresizingMaskIntoConstraints = NO;
-	label.text = text;
-	label.textAlignment = NSTextAlignmentCenter;
-	label.numberOfLines = 0;
-	if (bold) {
-		label.font = [UIFont boldSystemFontOfSize:fontSize];
-	} else {
-		label.font = [UIFont systemFontOfSize:fontSize];
-	}
-	label.textColor = [UIColor labelColor];
-	return label;
-}
-
-- (void)lfm_addSubview:(UIView*)subview to:(UIView*)containerView after:(UIView*)previousView {
-	[containerView addSubview:subview];
-	if (previousView) {
-		[NSLayoutConstraint activateConstraints:@[
-			[subview.topAnchor constraintEqualToAnchor:previousView.bottomAnchor constant:16],
-			[subview.leadingAnchor constraintEqualToAnchor:containerView.leadingAnchor],
-			[subview.trailingAnchor constraintEqualToAnchor:containerView.trailingAnchor]
-		]];
-	} else {
-		[NSLayoutConstraint activateConstraints:@[
-			[subview.topAnchor constraintEqualToAnchor:containerView.topAnchor],
-			[subview.leadingAnchor constraintEqualToAnchor:containerView.leadingAnchor],
-			[subview.trailingAnchor constraintEqualToAnchor:containerView.trailingAnchor]
-		]];
-	}
-}
-
-- (void)loginTapped:(id)sender {
-	[LFMClient createToken];
+- (void)doneTapped {
 	[self dismissViewControllerAnimated:YES completion:nil];
 }
 
-- (void)logoutTapped:(id)sender {
-	[LFMClient logout];
-	[self dismissViewControllerAnimated:YES completion:nil];
+- (void)viewWillAppear:(BOOL)animated {
+	[super viewWillAppear:animated];
+	// Refresh username when the view appears
+	if ([[NSUserDefaults standardUserDefaults] stringForKey:@"lfmSessionKey"]) {
+		[LFMClient refreshUsername];
+	}
+	[self.tableView reloadData];
+}
+
+#pragma mark - Table view data source
+
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
+	return 3;
+}
+
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
+	switch (section) {
+		case 0: return 1; // Account / login status
+		case 1: return 1; // Login/logout button
+		case 2: return 3; // Info rows (author, AI note, version)
+		default: return 0;
+	}
+}
+
+- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
+	switch (section) {
+		case 0: return @"Account";
+		case 1: return @"";
+		case 2: return @"About";
+		default: return nil;
+	}
+}
+
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
+	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"Cell" forIndexPath:indexPath];
+	cell.selectionStyle = UITableViewCellSelectionStyleDefault;
+	cell.accessoryType = UITableViewCellAccessoryNone;
+	cell.textLabel.textAlignment = NSTextAlignmentNatural;
+	cell.textLabel.textColor = [UIColor labelColor];
+	
+	switch (indexPath.section) {
+		case 0: {
+			cell.selectionStyle = UITableViewCellSelectionStyleNone;
+			NSString *username = [LFMClient username];
+			if (username && username.length > 0) {
+				cell.textLabel.text = [NSString stringWithFormat:@"Logged in as %@", username];
+				cell.textLabel.textColor = [UIColor systemGreenColor];
+				cell.imageView.image = [UIImage systemImageNamed:@"checkmark.circle.fill"];
+				cell.imageView.tintColor = [UIColor systemGreenColor];
+			} else {
+				cell.textLabel.text = @"Not connected to Last.fm";
+				cell.textLabel.textColor = [UIColor secondaryLabelColor];
+				cell.imageView.image = [UIImage systemImageNamed:@"exclamationmark.circle"];
+				cell.imageView.tintColor = [UIColor systemOrangeColor];
+			}
+			break;
+		}
+		case 1: {
+			cell.textLabel.textAlignment = NSTextAlignmentCenter;
+			NSString *sessionKey = [[NSUserDefaults standardUserDefaults] stringForKey:@"lfmSessionKey"];
+			if (sessionKey) {
+				cell.textLabel.text = @"Log Out";
+				cell.textLabel.textColor = [UIColor systemRedColor];
+			} else {
+				cell.textLabel.text = @"Connect to Last.fm";
+				cell.textLabel.textColor = [UIColor systemBlueColor];
+			}
+			break;
+		}
+		case 2: {
+			cell.selectionStyle = UITableViewCellSelectionStyleNone;
+			switch (indexPath.row) {
+				case 0:
+					cell.textLabel.text = @"Author: eternal";
+					cell.textLabel.textColor = [UIColor secondaryLabelColor];
+					break;
+				case 1:
+					cell.textLabel.text = @"AI was used for updating classes";
+					cell.textLabel.textColor = [UIColor secondaryLabelColor];
+					cell.textLabel.font = [UIFont systemFontOfSize:14];
+					break;
+				case 2:
+					cell.textLabel.text = @"v0.0.2";
+					cell.textLabel.textColor = [UIColor tertiaryLabelColor];
+					cell.textLabel.font = [UIFont systemFontOfSize:13];
+					break;
+			}
+			break;
+		}
+	}
+	return cell;
+}
+
+#pragma mark - Table view delegate
+
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
+	[tableView deselectRowAtIndexPath:indexPath animated:YES];
+	
+	if (indexPath.section == 1 && indexPath.row == 0) {
+		NSString *sessionKey = [[NSUserDefaults standardUserDefaults] stringForKey:@"lfmSessionKey"];
+		if (sessionKey) {
+			[LFMClient logout];
+			[self.tableView reloadData];
+		} else {
+			[LFMClient createToken];
+			[self dismissViewControllerAnimated:YES completion:nil];
+		}
+	}
 }
 
 + (void)showFromViewController:(UIViewController *)viewController {

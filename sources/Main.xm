@@ -1,44 +1,108 @@
 #import "../headers/Main.h"
+#import "../headers/YouTube/YTMSettingsViewController.h"
+
+#pragma mark - YTMContentViewController (main screen)
 %hook YTMContentViewController
 - (void) viewDidLoad {
 	%orig;
 	NSLog(@"Started.");
+}
+%end
 
-	UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
-	button.translatesAutoresizingMaskIntoConstraints = NO;
-	[button setTitle:@"Last.fm" forState:UIControlStateNormal];
-	button.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.6];
-	[button setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
-	button.titleLabel.font = [UIFont boldSystemFontOfSize:12];
-	button.layer.cornerRadius = 14;
-	[button addTarget:self action:@selector(lfm_openSettings:) forControlEvents:UIControlEventTouchUpInside];
-	[self.view addSubview:button];
-
+#pragma mark - YTMSettingsViewController (settings screen)
+%hook YTMSettingsViewController
+- (void)viewDidLoad {
+	%orig;
+	
+	// Only add the row once
+	if ([self.view viewWithTag:9999]) return;
+	
+	// ── Create a native-looking Last.fm settings row ──
+	UIView *lfmRow = [[UIView alloc] init];
+	lfmRow.translatesAutoresizingMaskIntoConstraints = NO;
+	lfmRow.backgroundColor = [UIColor secondarySystemGroupedBackgroundColor];
+	lfmRow.layer.cornerRadius = 10;
+	lfmRow.tag = 9999;
+	
+	// Icon label
+	UILabel *iconLabel = [[UILabel alloc] init];
+	iconLabel.translatesAutoresizingMaskIntoConstraints = NO;
+	iconLabel.text = @"🎵";
+	iconLabel.font = [UIFont systemFontOfSize:20];
+	
+	// Title
+	UILabel *titleLabel = [[UILabel alloc] init];
+	titleLabel.translatesAutoresizingMaskIntoConstraints = NO;
+	titleLabel.text = @"Last.fm Scrobbler";
+	titleLabel.font = [UIFont systemFontOfSize:16 weight:UIFontWeightMedium];
+	
+	// Status subtitle
+	UILabel *statusLabel = [[UILabel alloc] init];
+	statusLabel.translatesAutoresizingMaskIntoConstraints = NO;
+	NSString *username = [LFMClient username];
+	statusLabel.text = username ? [NSString stringWithFormat:@"Connected: %@", username] : @"Not connected";
+	statusLabel.font = [UIFont systemFontOfSize:12];
+	statusLabel.textColor = [UIColor secondaryLabelColor];
+	
+	// Disclosure chevron
+	UIImageView *chevron = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"chevron.right"]];
+	chevron.translatesAutoresizingMaskIntoConstraints = NO;
+	chevron.tintColor = [UIColor tertiaryLabelColor];
+	[chevron setContentHuggingPriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
+	
+	// Tap gesture
+	UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(lfm_settingsTapped)];
+	[lfmRow addGestureRecognizer:tap];
+	lfmRow.userInteractionEnabled = YES;
+	
+	[lfmRow addSubview:iconLabel];
+	[lfmRow addSubview:titleLabel];
+	[lfmRow addSubview:statusLabel];
+	[lfmRow addSubview:chevron];
+	[self.view addSubview:lfmRow];
+	
 	[NSLayoutConstraint activateConstraints:@[
-		[button.widthAnchor constraintEqualToConstant:70],
-		[button.heightAnchor constraintEqualToConstant:28],
-		[button.trailingAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.trailingAnchor constant:-12],
-		[button.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:12]
+		[lfmRow.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:16],
+		[lfmRow.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:16],
+		[lfmRow.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-16],
+		[lfmRow.heightAnchor constraintGreaterThanOrEqualToConstant:56],
+		
+		[iconLabel.centerYAnchor constraintEqualToAnchor:lfmRow.centerYAnchor],
+		[iconLabel.leadingAnchor constraintEqualToAnchor:lfmRow.leadingAnchor constant:12],
+		[iconLabel.widthAnchor constraintEqualToConstant:28],
+		
+		[titleLabel.topAnchor constraintEqualToAnchor:lfmRow.topAnchor constant:8],
+		[titleLabel.leadingAnchor constraintEqualToAnchor:iconLabel.trailingAnchor constant:12],
+		[titleLabel.trailingAnchor constraintLessThanOrEqualToAnchor:chevron.leadingAnchor constant:-8],
+		
+		[statusLabel.topAnchor constraintEqualToAnchor:titleLabel.bottomAnchor constant:1],
+		[statusLabel.leadingAnchor constraintEqualToAnchor:titleLabel.leadingAnchor],
+		[statusLabel.bottomAnchor constraintEqualToAnchor:lfmRow.bottomAnchor constant:-8],
+		
+		[chevron.centerYAnchor constraintEqualToAnchor:lfmRow.centerYAnchor],
+		[chevron.trailingAnchor constraintEqualToAnchor:lfmRow.trailingAnchor constant:-12],
 	]];
-
-	if(![[NSUserDefaults standardUserDefaults] stringForKey:@"lfmSessionKey"]) {
-		@try {
-			[LFMClient createToken];
-		} @catch (NSError *error) {
-			NSLog(@"Faced an issue while getting signature: %@", error.localizedDescription);
-			YTAlertView *alertView = [%c(YTAlertView) infoDialog];
-			alertView.title = @"Warning";
-			alertView.subtitle = [NSString stringWithFormat: @"Faced an issue while getting signature: %@", error.localizedDescription];
-			[alertView show];
+	
+	// Push collection view content below our row
+	dispatch_async(dispatch_get_main_queue(), ^{
+		for (UIView *subview in self.view.subviews) {
+			if ([subview isKindOfClass:[UIScrollView class]] && subview != lfmRow) {
+				UIScrollView *scrollView = (UIScrollView *)subview;
+				UIEdgeInsets insets = scrollView.contentInset;
+				if (insets.top < 80) {
+					insets.top += 72;
+					scrollView.contentInset = insets;
+					scrollView.scrollIndicatorInsets = insets;
+				}
+			}
 		}
-	};
+	});
 }
 
 %new
-- (void)lfm_openSettings:(id)sender {
+- (void)lfm_settingsTapped {
 	[LFMSettingsViewController showFromViewController:self];
 }
-
 %end
 %hook YTMQueueModificationNotifier
 - (void) queueController:(id)controller didReplacePlaylistWithPlaylistPanel:(id)panel {
