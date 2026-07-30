@@ -105,10 +105,9 @@
 		object:nil];
 }
 
-%new
 - (void)dealloc {
 	[[NSNotificationCenter defaultCenter] removeObserver:self];
-	%log;
+	%orig;
 }
 
 %new
