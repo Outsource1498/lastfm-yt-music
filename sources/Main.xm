@@ -106,6 +106,12 @@
 }
 
 %new
+- (void)dealloc {
+	[[NSNotificationCenter defaultCenter] removeObserver:self];
+	%log;
+}
+
+%new
 - (UIView *)lfm_findScrollViewInView:(UIView *)view excluding:(UIView *)exclude {
 	if (view == exclude) return nil;
 	if ([view isKindOfClass:[UIScrollView class]]) return view;
